@@ -1,15 +1,13 @@
-import io, torch, os
+import io, torch, os, base64
 import numpy as np
-from flask import Flask, request, jsonify, render_template, url_for
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from PIL import Image
 from torchvision import transforms
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
-import torch.nn.functional as F
 from model import get_model
-import io, torch, os, base64
 
 app = Flask(__name__)
 CORS(app)
@@ -62,12 +60,16 @@ def predict():
         pred_idx = probs.argmax().item()
         confidence = probs[pred_idx].item()
 
-        # GradCAM
-        cam = GradCAM(model=model, target_layers=[model.features[-1]])
-        grayscale_cam = cam(
-            input_tensor=tensor,
-            targets=[ClassifierOutputTarget(pred_idx)]
-        )[0]
+        # Use GradCAM as a context manager
+        with GradCAM(model=model, target_layers=[model.features[-1]]) as cam:
+            grayscale_cam = cam(
+                input_tensor=tensor,
+                targets=[ClassifierOutputTarget(pred_idx)]
+            )[0]
+
+        # Free tensor from memory now that GradCAM is done
+        del tensor
+
         visualization = show_cam_on_image(raw_np, grayscale_cam, use_rgb=True)
 
         buffered = io.BytesIO()
@@ -80,11 +82,14 @@ def predict():
             "probabilities": {
                 LABELS[i]: round(probs[i].item() * 100, 1) for i in range(3)
             },
-            "heatmap_url": f"data:image/png;base64,{heatmap_b64}"
+            "heatmap_url": f"image/png;base64,{heatmap_b64}"
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+get_loaded_model()
 
 if __name__ == "__main__":
     app.run(debug=True)
