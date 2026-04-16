@@ -7,7 +7,6 @@ import numpy as np
 from PIL import Image, ImageOps
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
-from PIL import Image
 from torchvision import transforms
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
@@ -56,7 +55,10 @@ def predict():
         file = request.files["image"]
         img = Image.open(io.BytesIO(file.read())).convert("RGB")
 
-        img_224 = img.resize((224, 224))
+        # Pads the image with black bars to make it 224x224 
+        # without cropping the edges OR distorting the ratio.
+        img_224 = ImageOps.pad(img, (224, 224), color=(0, 0, 0))
+        
         raw_np = np.array(img_224).astype(np.float32) / 255.0
         tensor = transform(img_224).unsqueeze(0).to(DEVICE)
 
@@ -77,25 +79,4 @@ def predict():
 
         buffered = io.BytesIO()
         Image.fromarray(visualization).save(buffered, format="PNG")
-        heatmap_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        heatmap_url = f"data:image/png;base64,{heatmap_b64}"
-
-        # 3. AGGRESSIVE MEMORY CLEANUP
-        del tensor
-        del grayscale_cam
-        del visualization
-        del img_224
-        del raw_np
-        gc.collect() # Force OS to reclaim RAM immediately
-
-        return jsonify({
-            "label": LABELS[pred_idx],
-            "confidence": round(confidence * 100, 1),
-            "probabilities": {
-                LABELS[i]: round(probs[i].item() * 100, 1) for i in range(3)
-            },
-            "heatmap_url": heatmap_url
-        })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        heatmap_b6
