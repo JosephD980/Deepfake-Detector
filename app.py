@@ -10,13 +10,6 @@ app = Flask(__name__)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 LABELS = {0: "Real", 1: "Tampered", 2: "AI Generated"}
 
-# ── Load model once at startup ──────────────────────────────────────────────
-model = get_model()
-model.load_state_dict(torch.load("model.pt", map_location=DEVICE))
-model.to(DEVICE)
-model.eval()
-
-# ── Preprocessing (must match training exactly) ─────────────────────────────
 preprocess = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -24,7 +17,7 @@ preprocess = transforms.Compose([
                          [0.229, 0.224, 0.225])
 ])
 
-# ── Grad-CAM implementation ──────────────────────────────────────────────────
+# ── Grad-CAM ─────────────────────────────────────────────────────────────────
 class GradCAM:
     def __init__(self, model, target_layer):
         self.model = model
@@ -43,7 +36,6 @@ class GradCAM:
         output = self.model(input_tensor)
         self.model.zero_grad()
         output[0, class_idx].backward()
-
         weights = self.gradients.mean(dim=(2, 3), keepdim=True)
         cam = (weights * self.activations).sum(dim=1).squeeze()
         cam = F.relu(cam)
@@ -52,10 +44,22 @@ class GradCAM:
         cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
         return cam
 
-# Target the last conv block — correct for torchvision EfficientNet-B0
-grad_cam = GradCAM(model, model.features[-1])
+# ── Lazy model loading — avoids startup timeout on Render ────────────────────
+_model = None
+_grad_cam = None
 
-# ── Helper: overlay heatmap on original image ────────────────────────────────
+def get_loaded_model():
+    global _model, _grad_cam
+    if _model is None:
+        m = get_model()
+        m.load_state_dict(torch.load("model.pt", map_location=DEVICE))
+        m.to(DEVICE)
+        m.eval()
+        _model = m
+        _grad_cam = GradCAM(_model, _model.features[-1])
+    return _model, _grad_cam
+
+# ── Heatmap overlay ───────────────────────────────────────────────────────────
 def overlay_heatmap(pil_img, cam):
     img_np = np.array(pil_img.resize((224, 224))).astype(np.uint8)
     heatmap = cv2.applyColorMap(np.uint8(255 * cam), cv2.COLORMAP_JET)
@@ -64,7 +68,7 @@ def overlay_heatmap(pil_img, cam):
     _, buffer = cv2.imencode(".png", cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR))
     return base64.b64encode(buffer).decode("utf-8")
 
-# ── Routes ───────────────────────────────────────────────────────────────────
+# ── Routes ────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -74,30 +78,35 @@ def predict():
     if "image" not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
 
-    file = request.files["image"]
-    img = Image.open(io.BytesIO(file.read())).convert("RGB")
-    tensor = preprocess(img).unsqueeze(0).to(DEVICE)
+    try:
+        model, grad_cam = get_loaded_model()
 
-    # Inference
-    with torch.enable_grad():   # needed for Grad-CAM backward pass
-        output = model(tensor)
+        file = request.files["image"]
+        img = Image.open(io.BytesIO(file.read())).convert("RGB")
+        tensor = preprocess(img).unsqueeze(0).to(DEVICE)
 
-    probs = F.softmax(output, dim=1)[0]
-    pred_idx = probs.argmax().item()
-    confidence = probs[pred_idx].item()
+        # Probabilities — no grad needed
+        with torch.no_grad():
+            output = model(tensor)
+        probs = F.softmax(output, dim=1)[0]
+        pred_idx = probs.argmax().item()
+        confidence = probs[pred_idx].item()
 
-    # Generate Grad-CAM for the predicted class
-    cam = grad_cam.generate(tensor, pred_idx)
-    heatmap_b64 = overlay_heatmap(img, cam)
+        # Grad-CAM — needs its own forward+backward pass
+        cam = grad_cam.generate(tensor.clone(), pred_idx)
+        heatmap_b64 = overlay_heatmap(img, cam)
 
-    return jsonify({
-        "label": LABELS[pred_idx],
-        "confidence": round(confidence * 100, 1),
-        "probabilities": {
-            LABELS[i]: round(probs[i].item() * 100, 1) for i in range(3)
-        },
-        "heatmap": heatmap_b64
-    })
+        return jsonify({
+            "label": LABELS[pred_idx],
+            "confidence": round(confidence * 100, 1),
+            "probabilities": {
+                LABELS[i]: round(probs[i].item() * 100, 1) for i in range(3)
+            },
+            "heatmap": heatmap_b64
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
