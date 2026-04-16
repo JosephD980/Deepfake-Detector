@@ -1,4 +1,8 @@
-import io, torch, os, base64
+import os
+import io
+import base64
+import gc          # Import the garbage collector
+import torch
 import numpy as np
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
@@ -8,6 +12,9 @@ from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from model import get_model
+
+# 1. FORCE PYTORCH TO USE 1 THREAD (CRITICAL)
+torch.set_num_threads(1)
 
 app = Flask(__name__)
 CORS(app)
@@ -20,17 +27,16 @@ transform = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-_model = None
+# 2. PRE-LOAD MODEL AT STARTUP
+def load_model():
+    m = get_model()
+    m.load_state_dict(torch.load("model.pt", map_location=DEVICE))
+    m.to(DEVICE)
+    m.eval()
+    return m
 
-def get_loaded_model():
-    global _model
-    if _model is None:
-        m = get_model()
-        m.load_state_dict(torch.load("model.pt", map_location=DEVICE))
-        m.to(DEVICE)
-        m.eval()
-        _model = m
-    return _model
+# Load this globally so it's ready before requests hit
+GLOBAL_MODEL = load_model()
 
 @app.route("/")
 def index():
@@ -44,9 +50,8 @@ def health():
 def predict():
     if "image" not in request.files:
         return jsonify({"error": "No image uploaded"}), 400
+        
     try:
-        model = get_loaded_model()
-
         file = request.files["image"]
         img = Image.open(io.BytesIO(file.read())).convert("RGB")
 
@@ -56,25 +61,31 @@ def predict():
 
         # Probabilities
         with torch.no_grad():
-            probs = torch.softmax(model(tensor), dim=1)[0]
+            probs = torch.softmax(GLOBAL_MODEL(tensor), dim=1)[0]
         pred_idx = probs.argmax().item()
         confidence = probs[pred_idx].item()
 
-        # Use GradCAM as a context manager
-        with GradCAM(model=model, target_layers=[model.features[-1]]) as cam:
+        # GradCAM
+        with GradCAM(model=GLOBAL_MODEL, target_layers=[GLOBAL_MODEL.features[-1]]) as cam:
             grayscale_cam = cam(
                 input_tensor=tensor,
                 targets=[ClassifierOutputTarget(pred_idx)]
             )[0]
-
-        # Free tensor from memory now that GradCAM is done
-        del tensor
 
         visualization = show_cam_on_image(raw_np, grayscale_cam, use_rgb=True)
 
         buffered = io.BytesIO()
         Image.fromarray(visualization).save(buffered, format="PNG")
         heatmap_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        heatmap_url = f"data:image/png;base64,{heatmap_b64}"
+
+        # 3. AGGRESSIVE MEMORY CLEANUP
+        del tensor
+        del grayscale_cam
+        del visualization
+        del img_224
+        del raw_np
+        gc.collect() # Force OS to reclaim RAM immediately
 
         return jsonify({
             "label": LABELS[pred_idx],
@@ -82,14 +93,8 @@ def predict():
             "probabilities": {
                 LABELS[i]: round(probs[i].item() * 100, 1) for i in range(3)
             },
-            "heatmap_url": f"image/png;base64,{heatmap_b64}"
+            "heatmap_url": heatmap_url
         })
-
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-get_loaded_model()
-
-if __name__ == "__main__":
-    app.run(debug=True)
