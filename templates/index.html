@@ -31,10 +31,21 @@
       padding: 40px 20px;
     }
 
-    header { text-align: center; margin-bottom: 36px; }
-    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
     header h1 span { color: var(--accent); }
-    header p { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
+    header p {
+      color: var(--muted);
+      margin-top: 6px;
+      font-size: 0.95rem;
+    }
 
     .card {
       background: var(--surface);
@@ -45,6 +56,7 @@
       max-width: 860px;
     }
 
+    /* ── Upload Zone ── */
     #drop-zone {
       border: 2px dashed var(--border);
       border-radius: var(--radius);
@@ -62,6 +74,7 @@
     #drop-zone strong { color: var(--accent); }
     #file-input { display: none; }
 
+    /* ── Analyse Button ── */
     #analyse-btn {
       display: block;
       width: 100%;
@@ -79,6 +92,7 @@
     #analyse-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     #analyse-btn:not(:disabled):hover { opacity: 0.88; }
 
+    /* ── Spinner ── */
     #spinner {
       display: none;
       flex-direction: column;
@@ -97,6 +111,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── Results ── */
     #results { display: none; margin-top: 32px; }
 
     .verdict {
@@ -108,28 +123,58 @@
       border: 1px solid var(--border);
       margin-bottom: 28px;
     }
-    .verdict-badge { font-size: 2rem; line-height: 1; }
-    .verdict-text h2 { font-size: 1.5rem; font-weight: 700; }
-    .verdict-text p { color: var(--muted); font-size: 0.9rem; margin-top: 2px; }
-    .verdict.real     { background: rgba(52,201,126,0.08); border-color: rgba(52,201,126,0.35); }
-    .verdict.tampered { background: rgba(245,166,35,0.08);  border-color: rgba(245,166,35,0.35); }
-    .verdict.fake     { background: rgba(232,64,64,0.08);   border-color: rgba(232,64,64,0.35); }
+    .verdict-badge {
+      font-size: 2rem;
+      line-height: 1;
+    }
+    .verdict-text h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .verdict-text p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 2px;
+    }
+    .verdict.real    { background: rgba(52,201,126,0.08); border-color: rgba(52,201,126,0.35); }
+    .verdict.tampered{ background: rgba(245,166,35,0.08);  border-color: rgba(245,166,35,0.35); }
+    .verdict.fake    { background: rgba(232,64,64,0.08);   border-color: rgba(232,64,64,0.35); }
     .verdict.real     .verdict-text h2 { color: var(--real); }
     .verdict.tampered .verdict-text h2 { color: var(--tampered); }
     .verdict.fake     .verdict-text h2 { color: var(--fake); }
 
+    /* ── Probability Bars ── */
     .probs { margin-bottom: 28px; }
     .probs h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 14px; }
     .prob-row { margin-bottom: 12px; }
-    .prob-label { display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 5px; }
+    .prob-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.88rem;
+      margin-bottom: 5px;
+    }
     .prob-label span:last-child { color: var(--muted); }
-    .bar-track { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; }
-    .bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s ease; }
+    .bar-track {
+      height: 8px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.6s ease;
+    }
     .bar-fill.real     { background: var(--real); }
     .bar-fill.tampered { background: var(--tampered); }
     .bar-fill.fake     { background: var(--fake); }
 
-    .image-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    /* ── Image Pair ── */
+    .image-pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
     @media (max-width: 560px) { .image-pair { grid-template-columns: 1fr; } }
 
     .img-card { text-align: center; }
@@ -147,5 +192,211 @@
       display: block;
     }
 
+    /* ── Error ── */
     #error-msg {
-      dis
+      display: none;
+      margin-top: 18px;
+      padding: 14px 18px;
+      background: rgba(232,64,64,0.1);
+      border: 1px solid rgba(232,64,64,0.35);
+      border-radius: var(--radius);
+      color: #e84040;
+      font-size: 0.9rem;
+    }
+
+    footer {
+      margin-top: 40px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Deepfake <span>Detector</span></h1>
+  <p>Upload an image to analyse authenticity using GradCAM heatmap visualisation</p>
+</header>
+
+<div class="card">
+
+  <!-- Upload -->
+  <div id="drop-zone" role="button" tabindex="0" aria-label="Upload image">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    <p><strong>Click to upload</strong> or drag &amp; drop</p>
+    <p style="margin-top:4px">PNG, JPG, WEBP supported</p>
+    <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp"/>
+  </div>
+
+  <button id="analyse-btn" disabled>Analyse Image</button>
+
+  <!-- Spinner -->
+  <div id="spinner">
+    <div class="spin"></div>
+    <span>Running inference…</span>
+  </div>
+
+  <!-- Error -->
+  <div id="error-msg"></div>
+
+  <!-- Results -->
+  <div id="results">
+
+    <div id="verdict-box" class="verdict">
+      <div class="verdict-badge" id="verdict-emoji"></div>
+      <div class="verdict-text">
+        <h2 id="verdict-label"></h2>
+        <p id="verdict-confidence"></p>
+      </div>
+    </div>
+
+    <div class="probs">
+      <h3>Class Probabilities</h3>
+      <div class="prob-row">
+        <div class="prob-label"><span>Real</span><span id="p-real">—</span></div>
+        <div class="bar-track"><div class="bar-fill real" id="b-real" style="width:0%"></div></div>
+      </div>
+      <div class="prob-row">
+        <div class="prob-label"><span>Tampered</span><span id="p-tampered">—</span></div>
+        <div class="bar-track"><div class="bar-fill tampered" id="b-tampered" style="width:0%"></div></div>
+      </div>
+      <div class="prob-row">
+        <div class="prob-label"><span>AI Generated</span><span id="p-fake">—</span></div>
+        <div class="bar-track"><div class="bar-fill fake" id="b-fake" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <div class="image-pair">
+      <div class="img-card">
+        <p>Original</p>
+        <img id="original-img" src="" alt="Original upload"/>
+      </div>
+      <div class="img-card">
+        <p>GradCAM Heatmap</p>
+        <img id="heatmap-img" src="" alt="GradCAM heatmap"/>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+</div><!-- /card -->
+
+<footer>Powered by PyTorch · GradCAM · Flask</footer>
+
+<script>
+  // Dynamic API URL handles both local testing and Render production
+  const API = window.location.origin;
+
+  const dropZone    = document.getElementById('drop-zone');
+  const fileInput   = document.getElementById('file-input');
+  const analyseBtn  = document.getElementById('analyse-btn');
+  const spinner     = document.getElementById('spinner');
+  const results     = document.getElementById('results');
+  const errorMsg    = document.getElementById('error-msg');
+
+  let selectedFile = null;
+
+  // ── File selection ──────────────────────────────────────
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) setFile(file);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  function setFile(file) {
+    selectedFile = file;
+    dropZone.querySelector('p').innerHTML = `<strong>${file.name}</strong>`;
+    analyseBtn.disabled = false;
+    results.style.display = 'none';
+    errorMsg.style.display = 'none';
+
+    // Show local preview immediately
+    const reader = new FileReader();
+    reader.onload = e => document.getElementById('original-img').src = e.target.result;
+    reader.readAsDataURL(file);
+  }
+
+  // ── Analyse ─────────────────────────────────────────────
+  analyseBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    setLoading(true);
+    errorMsg.style.display = 'none';
+    results.style.display  = 'none';
+
+    const formData = new FormData();
+    // FIX 1: Flask expects "image", not "file"
+    formData.append('image', selectedFile);
+
+    try {
+      const res  = await fetch(`${API}/predict`, { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (!res.ok || data.error) throw new Error(data.error || 'Server error');
+      renderResults(data);
+    } catch (err) {
+      errorMsg.textContent = `Error: ${err.message}`;
+      errorMsg.style.display = 'block';
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  // ── Render ───────────────────────────────────────────────
+  function renderResults(data) {
+    const labelMap = {
+      'Real':           { cls: 'real',     emoji: '✅' },
+      'Tampered':       { cls: 'tampered', emoji: '⚠️' },
+      'AI Generated':   { cls: 'fake',     emoji: '🚨' } // MATCHES FLASK LABELS EXACTLY
+    };
+    const { cls, emoji } = labelMap[data.label] ?? { cls: 'fake', emoji: '❓' };
+
+    // Verdict
+    const box = document.getElementById('verdict-box');
+    box.className = `verdict ${cls}`;
+    document.getElementById('verdict-emoji').textContent      = emoji;
+    document.getElementById('verdict-label').textContent      = data.label;
+    document.getElementById('verdict-confidence').textContent = `Confidence: ${data.confidence}%`;
+
+    // Bars
+    const p = data.probabilities;
+    setBar('real',     p['Real']);
+    setBar('tampered', p['Tampered']);
+    setBar('fake',     p['AI Generated']);
+
+    // FIX 2: Correctly prefix the base64 string
+    document.getElementById('heatmap-img').src = `image/png;base64,${data.heatmap}`;
+
+    results.style.display = 'block';
+    results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function setBar(id, value) {
+    document.getElementById(`p-${id}`).textContent = `${value}%`;
+    // Defer so CSS transition fires
+    setTimeout(() => {
+      document.getElementById(`b-${id}`).style.width = `${value}%`;
+    }, 50);
+  }
+
+  function setLoading(on) {
+    spinner.style.display  = on ? 'flex' : 'none';
+    analyseBtn.disabled    = on;
+  }
+</script>
+
+</body>
+</html>
