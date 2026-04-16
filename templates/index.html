@@ -360,7 +360,7 @@
     const labelMap = {
       'Real':           { cls: 'real',     emoji: '✅' },
       'Tampered':       { cls: 'tampered', emoji: '⚠️' },
-      'AI Generated':   { cls: 'fake',     emoji: '🚨' } // MATCHES FLASK LABELS EXACTLY
+      'AI Generated':   { cls: 'fake',     emoji: '🚨' } 
     };
     const { cls, emoji } = labelMap[data.label] ?? { cls: 'fake', emoji: '❓' };
 
@@ -378,7 +378,7 @@
     setBar('fake',     p['AI Generated']);
 
     // FIX 2: Correctly prefix the base64 string
-    document.getElementById('heatmap-img').src = `image/png;base64,${data.heatmap}`;
+    document.getElementById('heatmap-img').src = data.heatmap_url + '?t=' + Date.now();
 
     results.style.display = 'block';
     results.scrollIntoView({ behavior: 'smooth', block: 'start' });
