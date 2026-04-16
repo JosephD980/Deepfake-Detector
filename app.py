@@ -9,6 +9,7 @@ from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 import torch.nn.functional as F
 from model import get_model
+import io, torch, os, base64
 
 app = Flask(__name__)
 CORS(app)
@@ -69,10 +70,9 @@ def predict():
         )[0]
         visualization = show_cam_on_image(raw_np, grayscale_cam, use_rgb=True)
 
-        # Save heatmap as a real image file in static/
-        os.makedirs(app.static_folder, exist_ok=True)
-        heatmap_path = os.path.join(app.static_folder, "heatmap.png")
-        Image.fromarray(visualization).save(heatmap_path)
+        buffered = io.BytesIO()
+        Image.fromarray(visualization).save(buffered, format="PNG")
+        heatmap_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
 
         return jsonify({
             "label": LABELS[pred_idx],
@@ -80,7 +80,7 @@ def predict():
             "probabilities": {
                 LABELS[i]: round(probs[i].item() * 100, 1) for i in range(3)
             },
-            "heatmap_url": url_for("static", filename="heatmap.png", _external=False)
+            "heatmap_url": f"data:image/png;base64,{heatmap_b64}"
         })
 
     except Exception as e:

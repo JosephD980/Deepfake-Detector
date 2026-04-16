@@ -377,8 +377,8 @@
     setBar('tampered', p['Tampered']);
     setBar('fake',     p['AI Generated']);
 
-    // FIX 2: Correctly prefix the base64 string
-    document.getElementById('heatmap-img').src = data.heatmap_url + '?t=' + Date.now();
+    //Correctly prefix the base64 string
+    document.getElementById('heatmap-img').src = data.heatmap_url;
 
     results.style.display = 'block';
     results.scrollIntoView({ behavior: 'smooth', block: 'start' });
