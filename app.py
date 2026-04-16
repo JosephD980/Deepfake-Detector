@@ -79,4 +79,25 @@ def predict():
 
         buffered = io.BytesIO()
         Image.fromarray(visualization).save(buffered, format="PNG")
-        heatmap_b6
+        heatmap_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
+        heatmap_url = f"data:image/png;base64,{heatmap_b64}"
+
+        # 3. AGGRESSIVE MEMORY CLEANUP
+        del tensor
+        del grayscale_cam
+        del visualization
+        del img_224
+        del raw_np
+        gc.collect() # Force OS to reclaim RAM immediately
+
+        return jsonify({
+            "label": LABELS[pred_idx],
+            "confidence": round(confidence * 100, 1),
+            "probabilities": {
+                LABELS[i]: round(probs[i].item() * 100, 1) for i in range(3)
+            },
+            "heatmap_url": heatmap_url
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
