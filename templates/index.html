@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Deepfake Detector</title>
+  <style>
+    body { font-family: sans-serif; max-width: 860px; margin: 40px auto; padding: 0 20px; background: #0f0f0f; color: #e0e0e0; }
+    h1 { color: #7cb9ff; }
+    #drop-zone { border: 2px dashed #555; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+    #drop-zone.drag-over { border-color: #7cb9ff; }
+    #preview { max-width: 300px; border-radius: 8px; display: none; margin-top: 16px; }
+    #results { display: none; margin-top: 30px; }
+    .cards { display: flex; gap: 20px; flex-wrap: wrap; }
+    .card { background: #1e1e1e; border-radius: 10px; padding: 16px; flex: 1; min-width: 200px; }
+    .verdict { font-size: 2rem; font-weight: bold; }
+    .real    { color: #4caf50; }
+    .tampered { color: #ff9800; }
+    .ai-generated { color: #f44336; }
+    .bar-wrap { background: #333; border-radius: 4px; height: 10px; margin: 6px 0; }
+    .bar { height: 10px; border-radius: 4px; background: #7cb9ff; }
+    #heatmap-img { max-width: 100%; border-radius: 8px; }
+    button { background: #7cb9ff; color: #000; border: none; padding: 12px 28px; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold; margin-top: 16px; }
+    button:hover { background: #5aa0e8; }
+    #spinner { display: none; margin-top: 16px; font-style: italic; color: #aaa; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Deepfake Detector</h1>
+  <p>Upload an image to check if it's real, tampered, or fully AI-generated.</p>
+
+  <div id="drop-zone">
+    <p>Drag & drop an image here, or click to select</p>
+    <input type="file" id="file-input" accept="image/*" style="display:none" />
+    <img id="preview" alt="Preview" />
+  </div>
+  <button id="analyse-btn" style="display:none">Analyse Image</button>
+  <div id="spinner">⏳ Analysing...</div>
+
+  <div id="results">
+    <div class="cards">
+      <div class="card" id="verdict-card">
+        <h3>Verdict</h3>
+        <div class="verdict" id="verdict-text"></div>
+        <div id="confidence-text" style="margin-top:8px; color:#aaa;"></div>
+      </div>
+      <div class="card">
+        <h3>Class Probabilities</h3>
+        <div id="prob-bars"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:20px;">
+      <h3>🌡️ Grad-CAM Suspicion Heatmap</h3>
+      <p style="color:#aaa; font-size:0.9rem;">Red/warm regions show what most influenced the model's decision.</p>
+      <img id="heatmap-img" alt="Grad-CAM Heatmap" />
+    </div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.getElementById("file-input");
+    const preview  = document.getElementById("preview");
+    const analyseBtn = document.getElementById("analyse-btn");
+    const spinner  = document.getElementById("spinner");
+    const results  = document.getElementById("results");
+    let selectedFile = null;
+
+    dropZone.addEventListener("click", () => fileInput.click());
+    dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+    dropZone.addEventListener("drop", e => {
+      e.preventDefault(); dropZone.classList.remove("drag-over");
+      setFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
+
+    function setFile(file) {
+      if (!file) return;
+      selectedFile = file;
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = "block";
+      analyseBtn.style.display = "inline-block";
+      results.style.display = "none";
+    }
+
+    analyseBtn.addEventListener("click", async () => {
+      if (!selectedFile) return;
+      spinner.style.display = "block";
+      analyseBtn.style.display = "none";
+      results.style.display = "none";
+
+      const form = new FormData();
+      form.append("image", selectedFile);
+
+      const res = await fetch("/predict", { method: "POST", body: form });
+      const data = await res.json();
+      spinner.style.display = "none";
+      analyseBtn.style.display = "inline-block";
+
+      // Verdict
+      const verdictEl = document.getElementById("verdict-text");
+      verdictEl.textContent = data.label;
+      verdictEl.className = "verdict " + data.label.toLowerCase().replace(" ", "-");
+      document.getElementById("confidence-text").textContent = `Confidence: ${data.confidence}%`;
+
+      // Probability bars
+      const bars = document.getElementById("prob-bars");
+      bars.innerHTML = "";
+      for (const [label, pct] of Object.entries(data.probabilities)) {
+        bars.innerHTML += `
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;">
+              <span>${label}</span><span>${pct}%</span>
+            </div>
+            <div class="bar-wrap"><div class="bar" style="width:${pct}%"></div></div>
+          </div>`;
+      }
+
+      // Heatmap
+      document.getElementById("heatmap-img").src = "image/png;base64," + data.heatmap;
+      results.style.display = "block";
+    });
+  </script>
+</body>
+</html>
