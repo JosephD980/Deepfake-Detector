@@ -2,123 +2,150 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Deepfake Detector</title>
   <style>
-    body { font-family: sans-serif; max-width: 860px; margin: 40px auto; padding: 0 20px; background: #0f0f0f; color: #e0e0e0; }
-    h1 { color: #7cb9ff; }
-    #drop-zone { border: 2px dashed #555; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
-    #drop-zone.drag-over { border-color: #7cb9ff; }
-    #preview { max-width: 300px; border-radius: 8px; display: none; margin-top: 16px; }
-    #results { display: none; margin-top: 30px; }
-    .cards { display: flex; gap: 20px; flex-wrap: wrap; }
-    .card { background: #1e1e1e; border-radius: 10px; padding: 16px; flex: 1; min-width: 200px; }
-    .verdict { font-size: 2rem; font-weight: bold; }
-    .real    { color: #4caf50; }
-    .tampered { color: #ff9800; }
-    .ai-generated { color: #f44336; }
-    .bar-wrap { background: #333; border-radius: 4px; height: 10px; margin: 6px 0; }
-    .bar { height: 10px; border-radius: 4px; background: #7cb9ff; }
-    #heatmap-img { max-width: 100%; border-radius: 8px; }
-    button { background: #7cb9ff; color: #000; border: none; padding: 12px 28px; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold; margin-top: 16px; }
-    button:hover { background: #5aa0e8; }
-    #spinner { display: none; margin-top: 16px; font-style: italic; color: #aaa; }
-  </style>
-</head>
-<body>
-  <h1>🔍 Deepfake Detector</h1>
-  <p>Upload an image to check if it's real, tampered, or fully AI-generated.</p>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  <div id="drop-zone">
-    <p>Drag & drop an image here, or click to select</p>
-    <input type="file" id="file-input" accept="image/*" style="display:none" />
-    <img id="preview" alt="Preview" />
-  </div>
-  <button id="analyse-btn" style="display:none">Analyse Image</button>
-  <div id="spinner">⏳ Analysing...</div>
-
-  <div id="results">
-    <div class="cards">
-      <div class="card" id="verdict-card">
-        <h3>Verdict</h3>
-        <div class="verdict" id="verdict-text"></div>
-        <div id="confidence-text" style="margin-top:8px; color:#aaa;"></div>
-      </div>
-      <div class="card">
-        <h3>Class Probabilities</h3>
-        <div id="prob-bars"></div>
-      </div>
-    </div>
-    <div class="card" style="margin-top:20px;">
-      <h3>🌡️ Grad-CAM Suspicion Heatmap</h3>
-      <p style="color:#aaa; font-size:0.9rem;">Red/warm regions show what most influenced the model's decision.</p>
-      <img id="heatmap-img" alt="Grad-CAM Heatmap" />
-    </div>
-  </div>
-
-  <script>
-    const dropZone = document.getElementById("drop-zone");
-    const fileInput = document.getElementById("file-input");
-    const preview  = document.getElementById("preview");
-    const analyseBtn = document.getElementById("analyse-btn");
-    const spinner  = document.getElementById("spinner");
-    const results  = document.getElementById("results");
-    let selectedFile = null;
-
-    dropZone.addEventListener("click", () => fileInput.click());
-    dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("drag-over"); });
-    dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
-    dropZone.addEventListener("drop", e => {
-      e.preventDefault(); dropZone.classList.remove("drag-over");
-      setFile(e.dataTransfer.files[0]);
-    });
-    fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
-
-    function setFile(file) {
-      if (!file) return;
-      selectedFile = file;
-      preview.src = URL.createObjectURL(file);
-      preview.style.display = "block";
-      analyseBtn.style.display = "inline-block";
-      results.style.display = "none";
+    :root {
+      --bg:        #0d0f14;
+      --surface:   #161a23;
+      --border:    #2a2f3d;
+      --accent:    #5b8dee;
+      --real:      #34c97e;
+      --tampered:  #f5a623;
+      --fake:      #e84040;
+      --text:      #e2e8f0;
+      --muted:     #6b7280;
+      --radius:    12px;
     }
 
-    analyseBtn.addEventListener("click", async () => {
-      if (!selectedFile) return;
-      spinner.style.display = "block";
-      analyseBtn.style.display = "none";
-      results.style.display = "none";
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+    }
 
-      const form = new FormData();
-      form.append("image", selectedFile);
+    header { text-align: center; margin-bottom: 36px; }
+    header h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.5px; }
+    header h1 span { color: var(--accent); }
+    header p { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
 
-      const res = await fetch("/predict", { method: "POST", body: form });
-      const data = await res.json();
-      spinner.style.display = "none";
-      analyseBtn.style.display = "inline-block";
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      width: 100%;
+      max-width: 860px;
+    }
 
-      // Verdict
-      const verdictEl = document.getElementById("verdict-text");
-      verdictEl.textContent = data.label;
-      verdictEl.className = "verdict " + data.label.toLowerCase().replace(" ", "-");
-      document.getElementById("confidence-text").textContent = `Confidence: ${data.confidence}%`;
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 48px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    #drop-zone:hover, #drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(91,141,238,0.05);
+    }
+    #drop-zone svg { opacity: 0.4; margin-bottom: 14px; }
+    #drop-zone p  { color: var(--muted); font-size: 0.9rem; }
+    #drop-zone strong { color: var(--accent); }
+    #file-input { display: none; }
 
-      // Probability bars
-      const bars = document.getElementById("prob-bars");
-      bars.innerHTML = "";
-      for (const [label, pct] of Object.entries(data.probabilities)) {
-        bars.innerHTML += `
-          <div style="margin-bottom:10px;">
-            <div style="display:flex;justify-content:space-between;">
-              <span>${label}</span><span>${pct}%</span>
-            </div>
-            <div class="bar-wrap"><div class="bar" style="width:${pct}%"></div></div>
-          </div>`;
-      }
+    #analyse-btn {
+      display: block;
+      width: 100%;
+      margin-top: 20px;
+      padding: 14px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    #analyse-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    #analyse-btn:not(:disabled):hover { opacity: 0.88; }
 
-      // Heatmap
-      document.getElementById("heatmap-img").src = "image/png;base64," + data.heatmap;
-      results.style.display = "block";
-    });
-  </script>
-</body>
-</html>
+    #spinner {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 32px 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .spin {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #results { display: none; margin-top: 32px; }
+
+    .verdict {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 24px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin-bottom: 28px;
+    }
+    .verdict-badge { font-size: 2rem; line-height: 1; }
+    .verdict-text h2 { font-size: 1.5rem; font-weight: 700; }
+    .verdict-text p { color: var(--muted); font-size: 0.9rem; margin-top: 2px; }
+    .verdict.real     { background: rgba(52,201,126,0.08); border-color: rgba(52,201,126,0.35); }
+    .verdict.tampered { background: rgba(245,166,35,0.08);  border-color: rgba(245,166,35,0.35); }
+    .verdict.fake     { background: rgba(232,64,64,0.08);   border-color: rgba(232,64,64,0.35); }
+    .verdict.real     .verdict-text h2 { color: var(--real); }
+    .verdict.tampered .verdict-text h2 { color: var(--tampered); }
+    .verdict.fake     .verdict-text h2 { color: var(--fake); }
+
+    .probs { margin-bottom: 28px; }
+    .probs h3 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 14px; }
+    .prob-row { margin-bottom: 12px; }
+    .prob-label { display: flex; justify-content: space-between; font-size: 0.88rem; margin-bottom: 5px; }
+    .prob-label span:last-child { color: var(--muted); }
+    .bar-track { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s ease; }
+    .bar-fill.real     { background: var(--real); }
+    .bar-fill.tampered { background: var(--tampered); }
+    .bar-fill.fake     { background: var(--fake); }
+
+    .image-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 560px) { .image-pair { grid-template-columns: 1fr; } }
+
+    .img-card { text-align: center; }
+    .img-card p {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .img-card img {
+      width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: block;
+    }
+
+    #error-msg {
+      dis
