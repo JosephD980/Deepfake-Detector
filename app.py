@@ -14,7 +14,7 @@ from pytorch_grad_cam.utils.image import show_cam_on_image
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from model import get_model
 
-# Fpytorch use 1 thread 
+# 1. FORCE PYTORCH TO USE 1 THREAD (CRITICAL)
 torch.set_num_threads(1)
 
 app = Flask(__name__)
@@ -28,7 +28,7 @@ transform = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
-# pre load model
+# 2. PRE-LOAD MODEL AT STARTUP
 def load_model():
     m = get_model()
     m.load_state_dict(torch.load("model.pt", map_location=DEVICE))
@@ -36,7 +36,7 @@ def load_model():
     m.eval()
     return m
 
-# Load globaly
+# Load this globally so it's ready before requests hit
 GLOBAL_MODEL = load_model()
 
 @app.route("/")
@@ -56,15 +56,7 @@ def predict():
         file = request.files["image"]
         img = Image.open(io.BytesIO(file.read())).convert("RGB")
 
-        file = request.files["image"]
-        img = Image.open(io.BytesIO(file.read())).convert("RGB")
-
-        # Instead of squashing, this scales the image down and crops the center 
-        # to perfectly fit 224x224 while keeping the original proportions untouched.
-        img_224 = ImageOps.fit(img, (224, 224), Image.Resampling.LANCZOS)
-        
-        raw_np = np.array(img_224).astype(np.float32) / 255.0
-        tensor = transform(img_224).unsqueeze(0).to(DEVICE)
+        img_224 = img.resize((224, 224))
         raw_np = np.array(img_224).astype(np.float32) / 255.0
         tensor = transform(img_224).unsqueeze(0).to(DEVICE)
 
@@ -88,7 +80,7 @@ def predict():
         heatmap_b64 = base64.b64encode(buffered.getvalue()).decode("utf-8")
         heatmap_url = f"data:image/png;base64,{heatmap_b64}"
 
-   
+        # 3. AGGRESSIVE MEMORY CLEANUP
         del tensor
         del grayscale_cam
         del visualization
