@@ -72,6 +72,7 @@ def predict():
         # Save heatmap as a real image file in static/
         os.makedirs(app.static_folder, exist_ok=True)
         heatmap_path = os.path.join(app.static_folder, "heatmap.png")
+        Image.fromarray(visualization).save(heatmap_path)
 
         return jsonify({
             "label": LABELS[pred_idx],
